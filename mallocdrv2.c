@@ -6,12 +6,12 @@
 //include your code
 
 
-//replace malloc here with the appropriate version of my_malloc
-#define MALLOC malloc
-//replace free here with the appropriate version of my_free
-#define FREE free
-//define DUMP_HEAP() to be dump_heap() when you are done
-#define DUMP_HEAP()
+//replace malloc here with the appropriate version of mymalloc
+#define MALLOC my_malloc
+//replace free here with the appropriate version of myfree
+#define FREE my_free
+//define DUMP_HEAP() to be the dump_heap() function that you write
+#define DUMP_HEAP() dump_heap()
 
 int main()
 {

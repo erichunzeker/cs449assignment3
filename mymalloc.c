@@ -49,6 +49,7 @@ void *my_malloc(int size)
             node->prev = bestfit;
             node->prev->next = node;
             node->next = NULL;
+            tail = head;
             return ptr;
         }
 
@@ -66,9 +67,7 @@ void *my_malloc(int size)
 
 void my_free(void *data)
 {
-    struct Block *free = data-sizeof(struct Block);
-    free->occ = 0;
-    sbrk(1 - sizeof(free));
+    //free shit here
 }
 
 
