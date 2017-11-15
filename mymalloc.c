@@ -28,7 +28,6 @@ void *my_malloc(int size)
 
         while(currentBlock->next != NULL)                                                   //traverse linked list until end is reached
         {
-
             if(currentBlock->occ == 0 && currentBlock->size == (size + sizeof(struct Block)))
             {
                 currentBlock->occ = 1;
@@ -44,6 +43,8 @@ void *my_malloc(int size)
 
             currentBlock = currentBlock->next;
         }
+
+
 
         if(lowest == -1)                                                                    //end of list is reached and no blocks were big enough
         {
@@ -74,12 +75,15 @@ void *my_malloc(int size)
             return (currentLowest + sizeof(struct Block));
         }
 
-        else
-            return currentLowest;
+
+        return currentLowest;
 
     }
 
 }
+
+
+//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\//\\
 
 void my_free(void *data)
 {
@@ -100,21 +104,33 @@ void my_free(void *data)
         return;
     }
 
+
+
+
+
+
+
+
+
     else if(nextNode == NULL)                                                                           //CASE: Freeing node at tail
     {
         int size = 0;
 
         if(previousNode->occ == 0)
         {
+            size = previousNode->size + del->size;
+
             if(previousNode->prev != root)                                                              //if there's a free spot behind it that isnt head
             {
-                previousNode->prev->next = NULL;                                                        //set spot behind other free spot as the tail
-                size = previousNode->size + del->size;                                                  //size to drop
+                previousNode = previousNode->prev;
+                previousNode->next = NULL;
+                sbrk(-(size));
+                return;
             }
 
             else
             {
-                sbrk(-(del->size + previousNode->size + root->size));                                   //else: head, middle, and freeing node are all dropped
+                sbrk(-(size + root->size));                                   //else: head, middle, and freeing node are all dropped
                 head = NULL;                                                                            //head is null
                 return;
             }
@@ -123,11 +139,16 @@ void my_free(void *data)
         else
         {
             previousNode->next = NULL;
-            size = del->size;
+            sbrk(-(del->size));
+            return;
         }
-        sbrk(-size);                                                                                    //free what was dropped
-        return;                                                                                         //return ------GOOD-------
     }
+
+
+
+
+    //free from head up
+
 
     else if(previousNode == NULL)                                                                       //CASE: Freeing node at head
     {
@@ -135,35 +156,43 @@ void my_free(void *data)
 
         if(nextNode->occ == 0)                                                                          //if next node is also free
         {
+            size = nextNode->size + del->size;
+
             if(nextNode->next != NULL)                                                                  //make sure its not the tail
             {
-                size = nextNode->size + del->size;                                                      //size is both connecting nodes
+                nextNode = nextNode->next;
 
-                del->next = nextNode->next;                                                             //set nodes next to the next space
-                del->next->prev = del;                                                                  //
-                del->size = size;                                                                       //new size combined
+                del->size = size;
+                del->next = nextNode;                                                             //set nodes next to the next space
+                del->next->prev = del;                                                                       //new size combined
                 del->occ = 0;
+                return;
             }
             else
             {
-                sbrk(-(del->size + nextNode->size + root->size));                                       //head to tail is free - free free everything
+                sbrk(-(size + root->size));                                       //head to tail is free - free free everything
                 head = NULL;
                 return;
             }
 
         }
         else                                                                                            //free node at head
+        {
             del->occ = 0;
-
-        return;
+            return;
+        }
     }
+
 
     else if(previousNode->occ == 0)                                                                     //CASE: Freeing node and coalescing with one behind it
     {
 
         int newSize = 0;
 
-        if(nextNode->occ == 0)                                                                          //Node in front is empty too
+
+        // MEM expands in both directions
+
+        if(nextNode->occ == 0)    //prev 0 next 0                                                                       //Node in front is empty too
         {
             newSize = previousNode->size + del->size + nextNode->size;                                  //size is all three combined
 
@@ -178,6 +207,7 @@ void my_free(void *data)
                 del->next = nextNode;
                 del->next->prev = del;
                 del->occ = 0;
+
                 return;
             }
             else if(nextNode->next == NULL && previousNode->prev == root)                               //three nodes
@@ -186,31 +216,38 @@ void my_free(void *data)
                 head = NULL;
                 return;
             }
-            else if(nextNode->next == NULL)                                                             //two from tail
-            {
-                previousNode = previousNode->prev;
-                sbrk(-(newSize));
-                previousNode->next = NULL;
-                return;
-            }
-            else if(previousNode->prev == root)                                                         //two from head
+
+            else if(nextNode->next != NULL && previousNode->prev == root)
             {
                 nextNode = nextNode->next;
 
                 del->size = newSize;
                 del->prev = root;
-                del->prev->next = del;
                 del->next = nextNode;
                 del->next->prev = del;
                 del->occ = 0;
                 return;
             }
 
+            else if(nextNode->next == NULL && previousNode->prev != root)
+            {
+                previousNode = previousNode->prev;
+
+                previousNode->next = NULL;
+                sbrk(-(newSize));
+                return;
+            }
 
         }
-        else                                                                                            //only coalescing back node
+
+
+        //mem can only be freed from head to next
+
+
+        else // prev 0 next 1                                                                               //only coalescing back node
         {
             newSize = previousNode->size + del->size;
+
             if(previousNode->prev != root)                                                              //not two from head
             {
                 previousNode = previousNode->prev;
@@ -224,49 +261,54 @@ void my_free(void *data)
 
             else                                                                                        //two from head, make whole cluster head
             {
-                previousNode = root;
-
                 del->size = newSize;
-                del->prev = previousNode;
-                del->next = nextNode;
+                del->prev = root;
                 del->occ = 0;
                 return;
             }
         }
-        return;
     }
 
-    else if(nextNode->occ == 0)                                                                         //CASE: freeing node and coalescing one in front
+    //mem can only be freed from previous to tail
+
+
+    else if(previousNode->occ == 1)                                                                          //CASE: freeing node and coalescing one in front
     {
-        int newSize = nextNode->size + del->size;
-
-        if(nextNode->next != NULL)                                                                      //not two from tail
+        if(nextNode->occ == 0) //prv 1 next 0
         {
-            nextNode = nextNode->next;
+            int newSize = nextNode->size + del->size;
 
-            del->size = newSize;
-            del->next = nextNode;
-            del->next->prev = del;
+            if (nextNode->next != NULL)                                                                      //not two from tail
+            {
+                del->size = newSize;
+                nextNode = nextNode->next;
+
+
+                del->next = nextNode;
+                del->next->prev = del;
+                del->occ = 0;
+                return;
+            }
+            else
+            {
+                previousNode->next = NULL;
+                sbrk(-(newSize));                                                                           //two from tail, free whole cluster
+                return;
+            }
+        }
+
+
+         //mem can only be freed between prev and next
+
+        else
+        {
             del->occ = 0;
             return;
         }
 
-        else
-        {
-            sbrk(-(newSize));                                                                           //two from tail, free whole cluster
-            return;
-        }
     }
-
-    else if(previousNode->occ == 1 && nextNode->occ == 1)
-    {
-        del->occ = 0;
-        return;
-    }
-    return;
 
 }
-
 
 void dump_heap()
 {
