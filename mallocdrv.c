@@ -40,6 +40,7 @@ void freetree(struct tree *root)
         freetree(root->left);
     if(root->right != NULL)
         freetree(root->right);
+    //DUMP_HEAP();
     FREE(root);
 }
 

@@ -66,7 +66,8 @@ void *my_malloc(int size)
             newFree->occ = 0;                                                               //set new node as free
             newFree->next = currentLowest->next;                                            //set new nodes next to large old blocks next
             newFree->next->prev = newFree;
-            newFree->prev = currentLowest;                                                  //make current lowest the nodes prev
+            newFree->prev = currentLowest;                                                  //make current lowest the xxnodes prev
+            newFree->prev->next = newFree;
 
             currentLowest->size = size + sizeof(struct Block);                              //make size the malloc plus original struct size
             currentLowest->next = newFree;                                                  //reassure that the best fit's next node will be the new free node
@@ -89,6 +90,7 @@ void my_free(void *data)
 {
 
     struct Block *del, *previousNode = NULL, *nextNode = NULL;
+
     del = data - sizeof(struct Block);
 
     if(del->prev != NULL)
@@ -103,13 +105,6 @@ void my_free(void *data)
         sbrk(-(del->size));
         return;
     }
-
-
-
-
-
-
-
 
 
     else if(nextNode == NULL)                                                                           //CASE: Freeing node at tail
