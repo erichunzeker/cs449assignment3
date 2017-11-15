@@ -85,23 +85,18 @@ void my_free(void *data)
 {
 
     struct Block *del, *previousNode = NULL, *nextNode = NULL;
-
-    del = data - sizeof(struct Block);                                                                             //del points to start of data
+    del = data - sizeof(struct Block);                                                      //del points to start of data
 
     if(del->prev != NULL)                                                                   //check to make sure it's not a head
-    {
         previousNode = del->prev;                                                           //set prev node
-    }
 
     if(del->next != NULL)                                                                   //check to make sure its not a tail
-    {
         nextNode = del->next;                                                               //set next node
-    }
 
     if(previousNode == NULL && nextNode == NULL)                                            //if del is the only node in the list
     {
         head = NULL;
-        sbrk(-(del->size));                                                                //size to decrement heap by is the size of data
+        sbrk(-(del->size));                                                                 //size to decrement heap by is the size of data
         return;                                                                             //return because nothing left to do
     }
 
@@ -112,21 +107,23 @@ void my_free(void *data)
         if(previousNode->occ == 0)                                                          //previous space is also free, coalesce (cant be only node since i already checked that)
         {
             if(previousNode->prev != root)
+            {
                 previousNode->prev->next = NULL;
-                                                                                       //set last occupied block as tail, deallocate free space
+                size = previousNode->size + del->size;
+            }
+                                                                                        //set last occupied block as tail, deallocate free space
             else
             {
                 sbrk(-(del->size + previousNode->size + root->size));
                 head = NULL;                                                               //size to decrement heap by is the size of data
                 return;
             }
-            size = previousNode->size + del->size;
+
         }
         else                                                                                //has to be previousNode->occ == 1 bc i checked to make sure it wasnt null
         {
             previousNode->next = NULL;                                                      //previous space becomes new tail
             size = del->size;                                                          //set size to deallocate heap by
-
         }
         sbrk(-size);
         return;
