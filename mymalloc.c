@@ -85,117 +85,176 @@ void my_free(void *data)
 {
 
     struct Block *del, *previousNode = NULL, *nextNode = NULL;
-    del = data - sizeof(struct Block);                                                      //del points to start of data
+    del = data - sizeof(struct Block);
 
-    if(del->prev != NULL)                                                                   //check to make sure it's not a head
-        previousNode = del->prev;                                                           //set prev node
+    if(del->prev != NULL)
+        previousNode = del->prev;
 
-    if(del->next != NULL)                                                                   //check to make sure its not a tail
-        nextNode = del->next;                                                               //set next node
+    if(del->next != NULL)
+        nextNode = del->next;
 
-    if(previousNode == NULL && nextNode == NULL)                                            //if del is the only node in the list
+    if(previousNode == NULL && nextNode == NULL)
     {
         head = NULL;
-        sbrk(-(del->size));                                                                 //size to decrement heap by is the size of data
-        return;                                                                             //return because nothing left to do
+        sbrk(-(del->size));
+        return;
     }
 
-    else if(nextNode == NULL)                                                               //if user input is a tail
+    else if(nextNode == NULL)                                                                           //CASE: Freeing node at tail
     {
-        int size = 0;                                                                       //amount to decrease heap by
+        int size = 0;
 
-        if(previousNode->occ == 0)                                                          //previous space is also free, coalesce (cant be only node since i already checked that)
+        if(previousNode->occ == 0)
         {
-            if(previousNode->prev != root)
+            if(previousNode->prev != root)                                                              //if there's a free spot behind it that isnt head
             {
-                previousNode->prev->next = NULL;
-                size = previousNode->size + del->size;
+                previousNode->prev->next = NULL;                                                        //set spot behind other free spot as the tail
+                size = previousNode->size + del->size;                                                  //size to drop
             }
-                                                                                        //set last occupied block as tail, deallocate free space
+
             else
             {
-                sbrk(-(del->size + previousNode->size + root->size));
-                head = NULL;                                                               //size to decrement heap by is the size of data
+                sbrk(-(del->size + previousNode->size + root->size));                                   //else: head, middle, and freeing node are all dropped
+                head = NULL;                                                                            //head is null
                 return;
             }
 
         }
-        else                                                                                //has to be previousNode->occ == 1 bc i checked to make sure it wasnt null
+        else
         {
-            previousNode->next = NULL;                                                      //previous space becomes new tail
-            size = del->size;                                                          //set size to deallocate heap by
+            previousNode->next = NULL;
+            size = del->size;
         }
-        sbrk(-size);
-        return;
+        sbrk(-size);                                                                                    //free what was dropped
+        return;                                                                                         //return ------GOOD-------
     }
 
-    else if(previousNode == NULL)                                                           //if user input is a head
+    else if(previousNode == NULL)                                                                       //CASE: Freeing node at head
     {
-        int size = 0;                                                                       //new size of free block
+        int size = 0;
 
-        if(nextNode->occ == 0)                                                              //next space is also free, coalesce (cant be only node since i already checked that)
+        if(nextNode->occ == 0)                                                                          //if next node is also free
         {
+            if(nextNode->next != NULL)                                                                  //make sure its not the tail
+            {
+                size = nextNode->size + del->size;                                                      //size is both connecting nodes
 
-            size = nextNode->size + del->size;                                              //size of first and second block
-            del->size = size;                                                               //set size
-            del->next = nextNode->next;                                                     //ditch old free block since it joined with current
-            del->prev = NULL;
-            del->occ = 0;                                                                   //its free
-            nextNode->next->prev = del;                                                     //connect next block to new big free block
+                del->next = nextNode->next;                                                             //set nodes next to the next space
+                del->next->prev = del;                                                                  //
+                del->size = size;                                                                       //new size combined
+                del->occ = 0;
+            }
+            else
+            {
+                sbrk(-(del->size + nextNode->size + root->size));                                       //head to tail is free - free free everything
+                head = NULL;
+                return;
+            }
+
         }
-        else                                                                                //has to be nextNode->occ == 1 bc i checked to make sure it wasnt null
-        {
-            size = del->size;                                                               //size of everything
-            nextNode->size = size;                                                          //new size set
-            del->next = nextNode;
-            del->prev = NULL;
+        else                                                                                            //free node at head
             del->occ = 0;
 
-        }
         return;
     }
 
-    else if(previousNode->occ == 0)                                                         //block behind future free block is also free, coalesce
+    else if(previousNode->occ == 0)                                                                     //CASE: Freeing node and coalescing with one behind it
     {
 
         int newSize = 0;
 
-        if(nextNode->occ == 0)                                                              //surrounding blocks are free - coalesce (previous and next)
+        if(nextNode->occ == 0)                                                                          //Node in front is empty too
         {
-            newSize = previousNode->size + del->size + nextNode->size;
-            nextNode = nextNode->next;                                                      //next node should be the occ in front of next free block
-            previousNode = previousNode->prev;                                              //previous node should be the occ behind the previous free block
+            newSize = previousNode->size + del->size + nextNode->size;                                  //size is all three combined
 
-            del->size = newSize;                                                            //set new size to sum of previous, current, and next sizes
-            del->prev = previousNode;                                                       //set new prev
-            del->next = nextNode;                                                           //set new next
-            del->occ = 0;                                                                   //set as free
+            if(nextNode->next != NULL && previousNode->prev != root)                                    //space on each side of cluster
+            {
+                nextNode = nextNode->next;
+                previousNode = previousNode->prev;
+
+                del->size = newSize;
+                del->prev = previousNode;
+                del->prev->next = del;
+                del->next = nextNode;
+                del->next->prev = del;
+                del->occ = 0;
+                return;
+            }
+            else if(nextNode->next == NULL && previousNode->prev == root)                               //three nodes
+            {
+                sbrk(-(newSize + root->size));                                                          //clear all
+                head = NULL;
+                return;
+            }
+            else if(nextNode->next == NULL)                                                             //two from tail
+            {
+                previousNode = previousNode->prev;
+                sbrk(-(newSize));
+                previousNode->next = NULL;
+                return;
+            }
+            else if(previousNode->prev == root)                                                         //two from head
+            {
+                nextNode = nextNode->next;
+
+                del->size = newSize;
+                del->prev = root;
+                del->prev->next = del;
+                del->next = nextNode;
+                del->occ = 0;
+                return;
+            }
+
 
         }
-        else                                                                                //only previous block is free
+        else                                                                                            //only coalescing back node
         {
             newSize = previousNode->size + del->size;
-            previousNode = previousNode->prev;              //previous node should now be behind the free previous block
+            if(previousNode->prev != root)
+            {
+                previousNode = previousNode->prev;
 
-            del->size = newSize;                            //set size as sum of freed block and previous free block
-            del->prev = previousNode;                       //set new prev
-            del->next = nextNode;                           //set new next
-            del->occ = 0;                                   //set as free
+                del->size = newSize;
+                del->prev = previousNode;
+                del->prev->next = del;
+                del->occ = 0;
+                return;
+            }
+
+            else
+            {
+                previousNode = root;
+
+                del->size = newSize;
+                del->prev = previousNode;
+                del->next = nextNode;
+                del->occ = 0;
+                return;
+            }
         }
         return;
     }
 
-    else if(nextNode->occ == 0)                             //only next block is free, coalesce
+    else if(nextNode->occ == 0)                                                                         //CASE: freeing node and coalescing one in front
     {
-
         int newSize = nextNode->size + del->size;
-        nextNode = nextNode->next;                          //previous node should now be behind the free previous block
 
-        del->size = newSize;                                //set size as sum of freed block and previous free block
-        del->prev = previousNode;                           //set new prev
-        del->next = nextNode;                               //set new next
-        del->occ = 0;                                       //set as free
-        return;
+        if(nextNode->next != NULL)                                                                      //not two from tail
+        {
+            nextNode = nextNode->next;
+
+            del->size = newSize;
+            del->next = nextNode;
+            del->next->prev = del;
+            del->occ = 0;
+            return;
+        }
+
+        else
+        {
+            sbrk(-(newSize));                                                                           //two from tail, free whole cluster
+            return;
+        }
     }
 
     else if(previousNode->occ == 1 && nextNode->occ == 1)
