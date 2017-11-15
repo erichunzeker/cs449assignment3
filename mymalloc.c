@@ -5,7 +5,7 @@
 #include "mymalloc.h"
 
 static struct Block *head = NULL;	// head of list
-static struct Blcok *tail = NULL;
+static struct Block *tail = NULL;
 
 void *my_malloc(int size)
 {
@@ -17,52 +17,62 @@ void *my_malloc(int size)
         head->size = size + sizeof(struct Block);                                           //set header as size of whole block (data size + header)
         head->prev = NULL;                                                                  //single node - no prev
         head->next = NULL;                                                                  //single node - no next
+        tail = head;
         return ptr;                                                                         //RETURN POINTER TO START OF MALLOC !!! NOT START OF HEADER !!!!!!!
     }
     else
     {
-        struct Block *bestfit = head;
+        struct Block *currentBlock = head;                                                  //set current block pointer to head
         int lowest = -1;
-        struct Block *currentLowest;
+        struct Block *currentLowest;                                                        //keep track of free block with lowest wasted space
 
-        while(bestfit->next != NULL)
+        while(currentBlock->next != NULL)                                                   //traverse linked list until end is reached
         {
-            bestfit = bestfit->next;
 
-            if(bestfit->occ == 0 && bestfit->size == (size + sizeof(struct Block)))
-                return bestfit + sizeof(struct Block);
-
-            if(bestfit->occ == 0 && (bestfit->size >= (size + sizeof(struct Block))) && (lowest > bestfit->size || lowest == -1))
+            if(currentBlock->occ == 0 && currentBlock->size == (size + sizeof(struct Block)))
             {
-                lowest = bestfit->size;
-                currentLowest = bestfit;
+                currentBlock->occ = 1;
+
+                return ((char*)currentBlock + sizeof(struct Block));                               //current block is a perfect fit to malloc - return ptr to start of malloc
             }
+
+            if(currentBlock->occ == 0 && (currentBlock->size >= (size + sizeof(struct Block))) && (lowest == -1 || currentBlock->size < lowest))
+            {
+                lowest = currentBlock->size;                                                //exact match wasnt found, but closest match for now is stored
+                currentLowest = currentBlock;                                               //save current best fit
+            }
+
+            currentBlock = currentBlock->next;
         }
 
-        if(lowest == -1)
+        if(lowest == -1)                                                                    //end of list is reached and no blocks were big enough
         {
-            struct Block *node = sbrk(sizeof(struct Block));
-            void *ptr = sbrk(size);
-            node->occ = 1;
-            node->size = size + sizeof(struct Block);
-            node->prev = bestfit;
-            node->prev->next = node;
-            node->next = NULL;
-            tail = head;
-            return ptr;
+            struct Block *node = sbrk(sizeof(struct Block));                                //allocate size of block to append to heap
+            void *ptr = sbrk(size);                                                         //store pointer to start of data
+            node->occ = 1;                                                                  //set occupied
+            node->size = size + sizeof(struct Block);                                       //make size of node malloc plus original struct size
+            node->prev = currentBlock;                                                      //make previous block the last of linked list
+            node->prev->next = node;                                                        //set previous's next to itself
+            node->next = NULL;                                                              //make end
+            //tail = head;
+            return ptr;                                                                     //return pointer to start of malloc
         }
 
-        if(lowest > sizeof(struct Block) * 2 + size)
+        if(lowest > sizeof(struct Block) * 2 + size)                                        //free spot was found, but bigger than needed and could store another set of data
         {
-            struct Block *newFree;
+            struct Block *newFree = (char*)currentLowest + size + sizeof(struct Block);                                                          //make a new node
 
-            newFree->size = currentLowest->size - (size + sizeof(struct Block));
-            newFree->occ = 0;
-            newFree->next = currentLowest->next;
-            newFree->prev = currentLowest;
+            newFree->size = currentLowest->size - size - sizeof(struct Block);                                                       //set size to what the current block won't use
+            newFree->occ = 0;                                                               //set new node as free
+            newFree->next = currentLowest->next;                                            //set new nodes next to large old blocks next
+            newFree->next->prev = newFree;
+            newFree->prev = currentLowest;                                                  //make current lowest the nodes prev
 
-            currentLowest->size = size + sizeof(struct Block);
-            currentLowest->next = newFree;
+            currentLowest->size = size + sizeof(struct Block);                              //make size the malloc plus original struct size
+            currentLowest->next = newFree;                                                  //reassure that the best fit's next node will be the new free node
+            currentLowest->next->prev = currentLowest;
+            currentLowest->occ = 1;
+            return (currentLowest + sizeof(struct Block));
         }
 
         else
@@ -72,66 +82,96 @@ void *my_malloc(int size)
 
 }
 
-void my_free(void *data) //SHOULD WORK CORRECTLY
+void my_free(void *data)
 {
 
-    struct Block *del, *previousNode, *nextNode;
+    struct Block *del, *previousNode = NULL, *nextNode = NULL;
 
-    del = data;
+    del = data - sizeof(struct Block);                                                                             //del points to start of data
 
-
-    if(del->prev == NULL && del->next == NULL)
+    if(del->prev != NULL)                                                                   //check to make sure it's not a head
     {
-        int size = del->size + sizeof(struct Block);
-        sbrk(-size);
+        previousNode = del->prev;                                                           //set prev node
     }
 
-    if(del->prev != NULL)                                   //(Should be correct)
+    if(del->next != NULL)                                                                   //check to make sure its not a tail
     {
-        previousNode = del->prev;                           //set prev node
+        nextNode = del->next;                                                               //set next node
     }
 
-    if(del->next != NULL)                                   //(Should be correct)
+    if(previousNode == NULL && nextNode == NULL)                                            //if del is the only node in the list
     {
-        nextNode = del->next;                               //set next node
+        sbrk(-(sizeof(struct Block)));
+        head = NULL;
+        tail = NULL;
+        sbrk(-(del->size));                                                                //size to decrement heap by is the size of data
+        return;                                                                             //return because nothing left to do
     }
 
-    if(del->next == NULL )                                  //deallocate end of heap if user wants to free tail (should be correct)
+    else if(nextNode == NULL)                                                               //if user input is a tail
     {
-        int size = 0;
+        int size = 0;                                                                       //amount to decrease heap by
 
-        if(previousNode->occ == 0)                          //previous space is also free, coalesce
+        if(previousNode->occ == 0)                                                          //previous space is also free, coalesce (cant be only node since i already checked that)
         {
-            previousNode->prev->next = NULL;                //set last occupied block as tail, deallocate free space
+            previousNode->prev->next = NULL;                                                //set last occupied block as tail, deallocate free space
             size = previousNode->size + del->size + sizeof(struct Block);
         }
-        else
+        else                                                                                //has to be previousNode->occ == 1 bc i checked to make sure it wasnt null
         {
-            previousNode->next = NULL;                      //previous space becomes new tail
-            size = del->size + sizeof(struct Block);        //set size to deallocate heap by
+            previousNode->next = NULL;                                                      //previous space becomes new tail
+            size = del->size + sizeof(struct Block);                                     //set size to deallocate heap by
 
         }
         sbrk(-size);
-
+        return;
     }
 
-    else if(previousNode->occ == 0)                         //block behind future free block is also free, coalesce
+    else if(previousNode == NULL)                                                           //if user input is a head
     {
-        int newSize = 0;
 
-        if(nextNode->occ == 0)                              //surrounding blocks are free - coalesce (previous and next)
+        int size = 0;                                                                       //new size of free block
+
+        if(nextNode->occ == 0)                                                              //next space is also free, coalesce (cant be only node since i already checked that)
         {
-            newSize = previousNode->size + del->size + nextNode->size + sizeof(struct Block);
-            nextNode = nextNode->next;                      //next node should be the occ in front of next free block
-            previousNode = previousNode->prev;              //previous node should be the occ behind the previous free block
 
-            del->size = newSize;                            //set new size to sum of previous, current, and next sizes
-            del->prev = previousNode;                       //set new prev
-            del->next = nextNode;                           //set new next
-            del->occ = 0;                                   //set as free
+            size = nextNode->size + del->size;                                              //size of first and second block
+            del->size = size;                                                               //set size
+            del->next = nextNode->next;                                                     //ditch old free block since it joined with current
+            del->prev = NULL;
+            del->occ = 0;                                                                   //its free
+            nextNode->next->prev = del;                                                     //connect next block to new big free block
+        }
+        else                                                                                //has to be nextNode->occ == 1 bc i checked to make sure it wasnt null
+        {
+            size = del->size + sizeof(struct Block);                                        //size of everything
+            nextNode->size = size;                                                          //new size set
+            del->next = nextNode;
+            del->prev = NULL;
+            del->occ = 0;
 
         }
-        else //only previous block is free
+        return;
+    }
+
+    else if(previousNode->occ == 0)                                                         //block behind future free block is also free, coalesce
+    {
+
+        int newSize = 0;
+
+        if(nextNode->occ == 0)                                                              //surrounding blocks are free - coalesce (previous and next)
+        {
+            newSize = previousNode->size + del->size + nextNode->size + sizeof(struct Block);
+            nextNode = nextNode->next;                                                      //next node should be the occ in front of next free block
+            previousNode = previousNode->prev;                                              //previous node should be the occ behind the previous free block
+
+            del->size = newSize;                                                            //set new size to sum of previous, current, and next sizes
+            del->prev = previousNode;                                                       //set new prev
+            del->next = nextNode;                                                           //set new next
+            del->occ = 0;                                                                   //set as free
+
+        }
+        else                                                                                //only previous block is free
         {
             newSize = previousNode->size + del->size + sizeof(struct Block);
             previousNode = previousNode->prev;              //previous node should now be behind the free previous block
@@ -141,10 +181,12 @@ void my_free(void *data) //SHOULD WORK CORRECTLY
             del->next = nextNode;                           //set new next
             del->occ = 0;                                   //set as free
         }
+        return;
     }
 
     else if(nextNode->occ == 0)                             //only next block is free, coalesce
     {
+
         int newSize = nextNode->size + del->size + sizeof(struct Block);
         nextNode = nextNode->next;                          //previous node should now be behind the free previous block
 
@@ -152,13 +194,17 @@ void my_free(void *data) //SHOULD WORK CORRECTLY
         del->prev = previousNode;                           //set new prev
         del->next = nextNode;                               //set new next
         del->occ = 0;                                       //set as free
+        return;
     }
 
-    else                                                    //
+    else if(previousNode->occ == 1 && nextNode->occ == 1)
     {
+
         del->occ = 0;
-        int dealloc = del->size + sizeof(struct Block);
-        sbrk(-dealloc);
+
+
+
+        return;
     }
 
 
