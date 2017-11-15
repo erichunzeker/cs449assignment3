@@ -201,6 +201,7 @@ void my_free(void *data)
                 del->prev = root;
                 del->prev->next = del;
                 del->next = nextNode;
+                del->next->prev = del;
                 del->occ = 0;
                 return;
             }
@@ -210,7 +211,7 @@ void my_free(void *data)
         else                                                                                            //only coalescing back node
         {
             newSize = previousNode->size + del->size;
-            if(previousNode->prev != root)
+            if(previousNode->prev != root)                                                              //not two from head
             {
                 previousNode = previousNode->prev;
 
@@ -221,7 +222,7 @@ void my_free(void *data)
                 return;
             }
 
-            else
+            else                                                                                        //two from head, make whole cluster head
             {
                 previousNode = root;
 
@@ -262,6 +263,7 @@ void my_free(void *data)
         del->occ = 0;
         return;
     }
+    return;
 
 }
 
