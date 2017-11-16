@@ -88,6 +88,8 @@ void *my_malloc(int size)
 
 void my_free(void *data)
 {
+    if(data - sbrk(0) > 0)
+        return;
 
     struct Block *del, *previousNode = NULL, *nextNode = NULL;
 
@@ -138,9 +140,6 @@ void my_free(void *data)
             return;
         }
     }
-
-
-
 
     //free from head up
 
