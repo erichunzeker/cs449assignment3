@@ -183,7 +183,6 @@ void my_free(void *data)
 
         int newSize = 0;
 
-
         // MEM expands in both directions
 
         if(nextNode->occ == 0)    //prev 0 next 0                                                                       //Node in front is empty too
